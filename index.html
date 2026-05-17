@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>体重记录</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f4f0; color: #1a1a18; min-height: 100vh; }
+
+  .page { max-width: 720px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 0.25rem; }
+  .subtitle { font-size: 13px; color: #888780; margin-bottom: 1.75rem; }
+
+  /* stats */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .stat { background: #fff; border: 0.5px solid #ddd; border-radius: 10px; padding: 0.9rem 1rem; }
+  .stat-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+  .stat-value { font-size: 22px; font-weight: 500; }
+  .stat-unit { font-size: 13px; font-weight: 400; color: #888; }
+
+  /* add form */
+  .card { background: #fff; border: 0.5px solid #ddd; border-radius: 12px; padding: 1.1rem 1.25rem; margin-bottom: 1.5rem; }
+  .form-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .04em; }
+  .field input { height: 36px; border: 0.5px solid #ccc; border-radius: 8px; padding: 0 10px; font-size: 14px; background: #fafaf8; color: inherit; outline: none; transition: border-color .15s; }
+  .field input:focus { border-color: #888; background: #fff; }
+  .field input[type=number] { width: 100px; }
+  .field input[type=text] { width: 130px; }
+
+  button { height: 36px; padding: 0 16px; border-radius: 8px; border: 0.5px solid #ccc; background: #fafaf8; font-size: 13px; color: #444; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background .12s, border-color .12s; }
+  button:hover { background: #f0efe9; border-color: #aaa; }
+  button.primary { background: #1a1a18; color: #fff; border-color: #1a1a18; }
+  button.primary:hover { background: #333; }
+  button.danger { color: #a32d2d; border-color: transparent; background: transparent; padding: 0 8px; }
+  button.danger:hover { background: #fcebeb; border-color: #f09595; }
+
+  /* table */
+  .table-head { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.25rem; border-bottom: 0.5px solid #eee; }
+  .table-head p { font-size: 14px; font-weight: 500; }
+  #search { height: 32px; border: 0.5px solid #ccc; border-radius: 8px; padding: 0 10px; font-size: 13px; width: 140px; background: #fafaf8; outline: none; }
+  #search:focus { border-color: #888; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; padding: 10px 1.25rem; font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: .04em; border-bottom: 0.5px solid #eee; }
+  td { padding: 11px 1.25rem; border-bottom: 0.5px solid #f0efe9; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafaf8; }
+
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+  .badge-hi { background: #faece7; color: #993c1d; }
+  .badge-lo { background: #e6f1fb; color: #185fa5; }
+  .badge-ok { background: #f1efe8; color: #5f5e5a; }
+
+  .empty { text-align: center; padding: 3rem 1rem; color: #aaa; font-size: 14px; }
+
+  /* toast */
+  #toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(20px); background: #1a1a18; color: #fff; padding: 0.55rem 1.1rem; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; white-space: nowrap; z-index: 99; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* loading overlay */
+  #loading { display: none; position: fixed; inset: 0; background: rgba(255,255,255,.6); align-items: center; justify-content: center; font-size: 14px; color: #888; z-index: 50; }
+  #loading.show { display: flex; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>体重记录</h1>
+  <p class="subtitle" id="count-label">加载中…</p>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-label">最新体重</div><div class="stat-value" id="s-latest">—</div></div>
+    <div class="stat"><div class="stat-label">最高体重</div><div class="stat-value" id="s-max">—</div></div>
+    <div class="stat"><div class="stat-label">最低体重</div><div class="stat-value" id="s-min">—</div></div>
+  </div>
+
+  <div class="card">
+    <div class="form-row">
+      <div class="field">
+        <label>日期</label>
+        <input type="text" id="inp-date" placeholder="dd.mm.yyyy" maxlength="10" />
+      </div>
+      <div class="field">
+        <label>时间</label>
+        <input type="text" id="inp-time" placeholder="hh:mm" maxlength="5" />
+      </div>
+      <div class="field">
+        <label>体重 (kg)</label>
+        <input type="number" id="inp-weight" placeholder="70.0" step="0.1" min="0.1" />
+      </div>
+      <button onclick="fillNow()" title="填入当前时间">⏱ 现在</button>
+      <button class="primary" onclick="addRecord()">+ 添加</button>
+    </div>
+  </div>
+
+  <div class="card" style="padding:0;">
+    <div class="table-head">
+      <p>所有记录</p>
+      <input id="search" placeholder="搜索日期…" oninput="renderTable()" />
+    </div>
+    <div>
+      <table>
+        <thead><tr><th>#</th><th>日期</th><th>时间</th><th>体重</th><th>状态</th><th></th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="empty" style="display:none;">暂无记录</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <p style="font-size:14px; font-weight:500;">体重趋势</p>
+      <div style="display:flex; gap:6px;">
+        <button id="btn-all" onclick="setRange('all')" style="height:28px; padding:0 12px; font-size:12px;">全部</button>
+        <button id="btn-30" onclick="setRange(30)" style="height:28px; padding:0 12px; font-size:12px;">近30条</button>
+        <button id="btn-7" onclick="setRange(7)" style="height:28px; padding:0 12px; font-size:12px;">近7条</button>
+      </div>
+    </div>
+    <div style="position:relative; width:100%; height:260px;">
+      <canvas id="weightChart" role="img" aria-label="体重随时间变化的折线图">体重趋势折线图</canvas>
+    </div>
+    <div id="chart-empty" style="display:none; text-align:center; padding:2rem; color:#aaa; font-size:14px;">暂无数据</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="loading">加载中…</div>
+
+<script>
+const API = '';   // 同域部署，留空；如跨域改为 'http://localhost:8000'
+let records = [];
+
+async function apiFetch(path, opts = {}) {
+  document.getElementById('loading').classList.add('show');
+  try {
+    const res = await fetch(API + path, { headers: {'Content-Type':'application/json'}, ...opts });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '请求失败');
+    return data;
+  } finally {
+    document.getElementById('loading').classList.remove('show');
+  }
+}
+
+async function loadRecords() {
+  try {
+    records = await apiFetch('/records');
+    renderTable();
+    renderChart();
+  } catch(e) { toast('加载失败: ' + e.message); }
+}
+
+async function addRecord() {
+  const date = document.getElementById('inp-date').value.trim();
+  const time = document.getElementById('inp-time').value.trim();
+  const weight = parseFloat(document.getElementById('inp-weight').value);
+  if (!date || !time || isNaN(weight)) { toast('请填写完整信息'); return; }
+  try {
+    await apiFetch('/records', { method: 'POST', body: JSON.stringify({ date, time, weight }) });
+    document.getElementById('inp-weight').value = '';
+    await loadRecords();
+    toast('✓ 已添加记录');
+  } catch(e) { toast(e.message); }
+}
+
+async function deleteRecord(index) {
+  if (!confirm('确认删除这条记录？')) return;
+  try {
+    await apiFetch(`/records/${index}`, { method: 'DELETE' });
+    await loadRecords();
+    toast('已删除');
+  } catch(e) { toast(e.message); }
+}
+
+function fillNow() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('inp-date').value = `${pad(now.getDate())}.${pad(now.getMonth()+1)}.${now.getFullYear()}`;
+  document.getElementById('inp-time').value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
+function renderTable() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const filtered = records.map((r,i) => ({...r,_i:i})).filter(r => !q || r.date.toLowerCase().includes(q));
+  const weights = records.map(r => r.weight);
+  const maxW = weights.length ? Math.max(...weights) : null;
+  const minW = weights.length ? Math.min(...weights) : null;
+
+  document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
+  document.getElementById('tbody').innerHTML = filtered.map((r,n) => {
+    let badge = '';
+    if (records.length > 1 && r.weight === maxW) badge = '<span class="badge badge-hi">最高</span>';
+    else if (records.length > 1 && r.weight === minW) badge = '<span class="badge badge-lo">最低</span>';
+    else badge = '<span class="badge badge-ok">正常</span>';
+    return `<tr>
+      <td style="color:#aaa;font-size:12px;">${n+1}</td>
+      <td>${r.date}</td>
+      <td style="color:#888;">${r.time}</td>
+      <td style="font-weight:500;">${r.weight.toFixed(1)} <span style="font-size:12px;color:#aaa;">kg</span></td>
+      <td>${badge}</td>
+      <td><button class="danger" onclick="deleteRecord(${r._i})" title="删除">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('count-label').textContent = `共 ${records.length} 条记录`;
+  if (records.length) {
+    const last = records[records.length-1];
+    document.getElementById('s-latest').innerHTML = `${last.weight.toFixed(1)}<span class="stat-unit"> kg</span>`;
+    document.getElementById('s-max').innerHTML = `${maxW.toFixed(1)}<span class="stat-unit"> kg</span>`;
+    document.getElementById('s-min').innerHTML = `${minW.toFixed(1)}<span class="stat-unit"> kg</span>`;
+  } else {
+    ['s-latest','s-max','s-min'].forEach(id => document.getElementById(id).textContent = '—');
+  }
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+let chartRange = 'all';
+let weightChart = null;
+
+function setRange(r) {
+  chartRange = r;
+  ['all','30','7'].forEach(k => {
+    document.getElementById('btn-'+k).style.background = (String(r) === k) ? '#1a1a18' : '';
+    document.getElementById('btn-'+k).style.color = (String(r) === k) ? '#fff' : '';
+    document.getElementById('btn-'+k).style.borderColor = (String(r) === k) ? '#1a1a18' : '';
+  });
+  renderChart();
+}
+
+function parseRecordDate(r) {
+  const [d, m, y] = r.date.split('.');
+  const [hh, mm] = r.time.split(':');
+  return new Date(+y, +m - 1, +d, +hh, +mm);
+}
+
+function renderChart() {
+  const canvas = document.getElementById('weightChart');
+  const emptyEl = document.getElementById('chart-empty');
+
+  let data = [...records];
+  if (chartRange !== 'all') data = data.slice(-chartRange);
+
+  if (data.length === 0) {
+    canvas.style.display = 'none';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  canvas.style.display = 'block';
+  emptyEl.style.display = 'none';
+
+  const points = data.map(r => ({ x: parseRecordDate(r), y: r.weight }));
+  const weights = data.map(r => r.weight);
+  const minW = Math.min(...weights);
+  const maxW = Math.max(...weights);
+  const pad = Math.max((maxW - minW) * 0.3, 1);
+
+  const spanMs = points[points.length - 1].x - points[0].x;
+  const spanDays = spanMs / 86400000;
+  let unit = 'hour';
+  if (spanDays > 60) unit = 'month';
+  else if (spanDays > 7) unit = 'day';
+
+  if (weightChart) weightChart.destroy();
+  weightChart = new Chart(canvas, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: '体重',
+        data: points,
+        backgroundColor: '#1a1a18',
+        pointRadius: 5,
+        pointHoverRadius: 7
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => {
+              const d = new Date(items[0].parsed.x);
+              const p = n => String(n).padStart(2,'0');
+              return `${p(d.getDate())}.${p(d.getMonth()+1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+            },
+            label: ctx => `${ctx.parsed.y.toFixed(1)} kg`
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: {
+            unit,
+            displayFormats: { hour: 'MM/dd HH:mm', day: 'MM/dd', month: 'yyyy/MM' }
+          },
+          ticks: { font: { size: 11 }, color: '#888', maxRotation: 45, autoSkip: true, maxTicksLimit: 8 },
+          grid: { color: '#f0efe9' }
+        },
+        y: {
+          min: parseFloat((minW - pad).toFixed(1)),
+          max: parseFloat((maxW + pad).toFixed(1)),
+          ticks: { font: { size: 11 }, color: '#888', callback: v => v.toFixed(1) + ' kg' },
+          grid: { color: '#f0efe9' }
+        }
+      }
+    }
+  });
+}
+
+fillNow();
+loadRecords();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => { setRange('all'); });
+</script>
+</body>
+</html>
