@@ -2,6 +2,8 @@
 
 A lightweight personal weight logging app with a FastAPI backend and a plain-HTML/JS frontend. Records are stored in a local JSON file — no database setup required.
 
+It maybe combined with esp32 later. 
+
 ---
 
 ## Features
